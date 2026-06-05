@@ -68,7 +68,7 @@
 
 ---
 
-## 三、SupCon Late Fusion 模型评估结果
+## 三、Late Fusion 模型评估结果
 
 基于语义特征（semantic）与统计特征的Late Fusion融合方法，在测试集上的结果如下：
 
@@ -210,7 +210,7 @@ Total Loss = λ × L_SupCon + (1 - λ) × L_CE
 ```
 其中 λ = 0.5，Temperature = 0.07，Projection Dim = 128。
 
-**效果：** SupCon 正则化有效提升了 HLT（模型增强）类别的区分度，使 HLT 的 F1 从 0.96 进一步提升至 0.99。
+**效果：** scl有效提升了 HLT（模型增强）类别的区分度，使 HLT 的 F1 从 0.96 进一步提升至 0.99。
 
 | 指标 | 值 |
 |------|------|
