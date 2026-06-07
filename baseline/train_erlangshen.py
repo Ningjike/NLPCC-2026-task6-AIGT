@@ -59,7 +59,7 @@ def compute_metrics(pred):
     }
 
 def train_model(
-    model_name='IDEA-CCNL/Erlangshen-Roberta-110M-NLI',
+    model_name='IDEA-CCNL/Erlangshen-Roberta-330M-NLI',
     train_data_path='data/processed/train.json',
     val_data_path='data/processed/val.json',
     output_dir='models/full_ft',
