@@ -10,12 +10,14 @@
 | 准确率 (Accuracy) | 0.8072 |0.9709 |
 | Macro Precision | 0.8294 |0.9714 |
 | Macro Recall | 0.8072 |0.9709 |
-后续模型选定 Erlangshen
+
+据此后续模型选定 Erlangshen
 
 ---
 ## 二郎神（Erlangshen-Roberta-330M-NLI）评估结果
 
 **硬件**：NVIDIA A100-SXM4-40GB
+
 训练过程 `train_data.json` 清洗后 **8 : 2**（train : val）
 ### 训练过程
 
@@ -43,8 +45,8 @@
 -  训练到约 3000 step 后验证指标基本饱和，3685 step 时 val Macro-F1 = 0.9702。
  -  Codabench 评估 testp1.json： **0.4320** 
 
-选型阶段的 0.9709 与 Codabench 的 0.4320 出现 0.54 的巨大差异
-测试集来自与训练集不同的模型、领域，而模型泛化能力不够
+>选型阶段的 0.9709 与 Codabench 的 0.4320 出现 0.54 的巨大差异
+>测试集来自与训练集不同的模型、领域，而模型泛化能力不够
 
 ---
 ## 二郎神 + Supervised Contrastive Learning
@@ -68,13 +70,14 @@ L_total = λ · L_SupCon + (1 − λ) · L_CE
 |------|------|
 | 验证集 Macro-F1 | **0.6890** |
 | **Codabench 官方 F1** | **0.3768** |
-验证集F1比全参微调（0.97）低 0.28，Codabench 测试集F1也比基线（0.4320）低 0.06。两个数据集表现一致地变差。说明SCL 学到的特征空间对齐对分布外数据可能没有太大帮助。
+
+>验证集F1比全参微调（0.97）低 0.28，Codabench 测试集F1也比基线（0.4320）低 0.06。两个数据集表现一致地变差。说明SCL 学到的特征空间对齐对分布外数据可能没有太大帮助。
 
 ---
 ## Late Fusion 模型
 
 基于语义特征（semantic）与统计特征的 Late Fusion 融合方法
-### 4.1 特征定义
+### 特征定义
 
 | 特征名 | 说明 |
 |--------|------|
@@ -85,7 +88,7 @@ L_total = λ · L_SupCon + (1 − λ) · L_CE
 | **repetition** | 重复率，文本中 n-gram 重复的比例，AI 生成文本重复率较高 |
 | **lexical_diversity** | 词汇多样性（unique tokens / total tokens），AI 生成文本词汇多样性较低 |
 
-### 特征组合对比（**内部 val 集**，in-dist）
+### 特征组合对比（**内部 val 集**）
 
 | 特征组合 | Val Loss | Val Acc | Val Macro-F1 |
 |----------|----------|---------|--------------|
@@ -104,10 +107,10 @@ L_total = λ · L_SupCon + (1 − λ) · L_CE
 | 方案 | 验证集 Macro-F1 | **Codabench F1** |
 |------|----------------|------------------|
 | semantic + ppl | 0.9526 | **0.3075** |
-Late Fusion 拿到在验证集上达到0.95+ ，但 Codabench 跌到 0.3075。
-比全参微调基线 0.4320 低 0.12。
+
+>Late Fusion 拿到在验证集上达到0.95+ ，但 Codabench 跌到 0.3075。
+>比全参微调基线 0.4320 低 0.12。
 统计特征在 OOD 上没帮助。
-Late Fusion 同样没能解决 OOD 问题。**Codabench 仅 0.3075**，是迄今所有方案里最差的。统计特征（ppl / 突发性 / 重复率）在 in-dist 上对 AI 文本的"风格印记"似乎有判别力，但放到 testp1 上完全没用——很可能 OOD 文本的风格特征分布已经偏移。
 
 ---
 ## FAID 适配（多任务 + 多级对比 + Fuzzy k-NN）
@@ -123,8 +126,6 @@ Late Fusion 同样没能解决 OOD 问题。**Codabench 仅 0.3075**，是迄今
 | SupCon 投影头 | SupConProjectionHead | [faid_chinese/model.py](faid_chinese/model.py) |
 | Fuzzy k-NN 推理 | VectorDB + knn_vote | [faid_chinese/infer_faid_chinese.py](faid_chinese/infer_faid_chinese.py) |
 | 富标签数据（family + style_level） | v2 新增 | [faid_chinese/data_pipeline.py](faid_chinese/data_pipeline.py) |
-
-5 项对比子损失：HWT 拉同 label、LGT 拉同 label + 同 model 家族、HLT 拉同 label + 同 model 家族（FAID 核心项 loss_mixed_set）。
 
 ### 数据处理
 处理脚本：[faid_chinese/data_pipeline.py](faid_chinese/data_pipeline.py)
@@ -256,23 +257,9 @@ Late Fusion 同样没能解决 OOD 问题。**Codabench 仅 0.3075**，是迄今
 > 1. axis-isolated OOD（哪怕是"全家族可见"）**不能作为 testp1 难度的代理**；
 > 2. **增加训练数据 / 增强模型容量不能突破"单轴分离的 OOD"与"多轴叠加的真实 OOD"之间的本质差距**；
 > 3. FAID 论文给出的"作者风格对比 + 多任务辅助"在原作者设定的 in-domain 设置里 work，**但 task-specific 的 OOD 漂移要靠 task-specific 的解法**。
->
-> 既然 Round 3 也未突破基线，**FAID 这条路可以判定为走不通**，应将精力转向对 testp1 真实分布更鲁棒的方向（见 §七 后续待做）。
 
-
-### 5.7 FAID 三轮总评
-
-| | in-dist F1 | 内部 4 集平均 F1 | **Codabench F1（testp1）** |
-|------|-----------|------------------|----------------------------|
-| Erlangshen 全参微调（清洗基线）| 0.9709 | — | **0.4320** |
-| FAID Round 1 | 0.674 | 0.623 | 0.3766 |
-| FAID Round 2 | 0.978 | 0.945 | 0.4139 |
-| **FAID Round 3** | **0.980** | **0.944** | **0.4004** |
 
 **所有 FAID 变体都低于或接近基线 0.4320**。该方案带来的所有复杂度（5 项对比损失、3 个辅助头、Fuzzy k-NN、序数回归）都没能转化为 OOD 泛化的提升——核心瓶颈在 testp1 的分布漂移本身，不在算法。
-
-> 完整训练日志见 [faid_chinese/models/train_log.jsonl](faid_chinese/models/train_log.jsonl)，逐 epoch 每 phase（val_in / model_ood / domain_ood / transform_ood）的 F1/Acc/per-class 都在里面。
-
 ---
 
 ## Binoculars Cascade（Stage 1 零样本 + Stage 2 二分类）
@@ -280,5 +267,4 @@ Late Fusion 同样没能解决 OOD 问题。**Codabench 仅 0.3075**，是迄今
 - **Stage 1**：Binoculars 零样本（Qwen2.5-1.5B-Instruct + Qwen2.5-1.5B 双模型对），在 train+val 标注数据上扫阈值 τ
 - **Stage 2**：Erlangshen-Roberta-330M-NLI 在 label ∈ {1, 2} 子集上做二分类微调
 - **合并**：Stage 1 判 HWT → label 0；其余样本由 Stage 2 决定 label 1 / 2
-
 ---
