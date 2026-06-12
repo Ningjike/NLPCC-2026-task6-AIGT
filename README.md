@@ -115,17 +115,9 @@ L_total = λ · L_SupCon + (1 − λ) · L_CE
 ---
 ## FAID 适配（多任务 + 多级对比 + Fuzzy k-NN）
 
-参考 FAID 论文 *Fine-Grained AI-Generated Text Detection Using Multi-Task Auxiliary and Multi-Level Contrastive Learning*，把算法核心适配到 NLPCC 2026 Task 6 的中文 AIGT 3 分类任务上。**关键差异：保留 Erlangshen-Roberta-330M-NLI 作为 backbone，不换 XLM-R。**
+参考 FAID 论文 *Fine-Grained AI-Generated Text Detection Using Multi-Task Auxiliary and Multi-Level Contrastive Learning*，把算法核心适配到 NLPCC 2026 Task 6 的中文 AIGT 3 分类任务上。
 
-| 论文组件 | 我们的实现 | 文件 |
-|----------|----------|------|
-| Encoder | FaidChineseModel.encode（Erlangshen） | [faid_chinese/model.py](faid_chinese/model.py) |
-| 3 类主分类头 | head_main | 同上 |
-| 辅助多任务头 | head_model / head_domain / head_transform | 同上 |
-| 多级对比损失 5 项 | multi_level_loss / five_level_mcl_loss | [faid_chinese/losses.py](faid_chinese/losses.py) |
-| SupCon 投影头 | SupConProjectionHead | [faid_chinese/model.py](faid_chinese/model.py) |
-| Fuzzy k-NN 推理 | VectorDB + knn_vote | [faid_chinese/infer_faid_chinese.py](faid_chinese/infer_faid_chinese.py) |
-| 富标签数据（family + style_level） | v2 新增 | [faid_chinese/data_pipeline.py](faid_chinese/data_pipeline.py) |
+**保留 Erlangshen-Roberta-330M-NLI 作为 backbone，不换 XLM-R。**
 
 ### 数据处理
 处理脚本：[faid_chinese/data_pipeline.py](faid_chinese/data_pipeline.py)
@@ -133,19 +125,10 @@ L_total = λ · L_SupCon + (1 − λ) · L_CE
 |------|------|------|
 | 1 | 6 维清洗（长度 / 极端比 / ROUGE / 中文占比 / 纯英文 / 123 重复） | 清洗后三元组 |
 | 2 | 展开三元组 → 3 条分类样本 | 富标签样本 |
-| 3 | 按 base ID 切 80/20（防同一三元组泄露） | train / val |
+| 3 | 按 base ID 切 8/2（防同一三元组泄露） | train / val |
 | 4 | 类内 1:1:1 严格平衡 | 最终 train / val |
 
-**关键设计**：
-
-- 4 家族（GPT4 / Qwen / ChatGLM / Baichuan）+ 2 域（News / Thesis）+ 2 变换（Rewrite / Polish）**全部保留在训练集**，不留任何 axis-isolated OOD
-- 真实 OOD 测试 = Codabench leaderboard
-- 富标签格式：`{id, text, label, family, style_level, is_mixed}`，其中 `style_level` 是为后续序数回归（HLT 应靠近对应来源 LLM）做准备
-
-  
-
 **清洗阈值**：
-
 | 维度 | 阈值 |
 |------|------|
 | 最短 / 最长字符数 | 30 / 4000 |
@@ -153,36 +136,17 @@ L_total = λ · L_SupCon + (1 − λ) · L_CE
 | LGT/HWT 长度比上限 | 3.0 |
 | ROUGE-2 (HWT, LGT) | ≤ 0.85 |
 | 中文字符占比下限 | 0.5 |
+
 ### 训练配置
-
-- backbone：Erlangshen-Roberta-330M-NLI，max_length = 512
-- `lambda_main_ce = 1.0`，`lambda_aux_ce = 0.2`，`lambda_mcl = 0.3`（**关键**：原论文 1.0 会让分类头被压制）
-- `temperature = 0.07`，`use_5level_mcl = True`
-- 优化器：AdamW + linear warmup (5%) + fp16
-- batch_size = 16，10 epoch，~3.5 小时 on 3090
-- 推理：`alpha_knn = 0.7`（k-NN 软投票话语权加大），`top_k = 20`
 ### Round 1：FAID 原文配置（lambda_mcl = 1.0）
-| 指标 | 值 |
-|------|---|
-| 训练 L_main（终） | 0.50 |
-| 训练 L_mcl（终） | 4.13 |
-| in-dist val F1 | 0.674 |
-| OOD model_ood F1 | 0.566 |
-| OOD domain_ood F1 | 0.606 |
-| OOD transform_ood F1 | 0.647 |
-| 4 集平均 | 0.623 |
-| **Codabench F1** | **0.3766** |
-
-> `L_mcl` 占总梯度 88%，分类头被压制，LGT F1 仅 0.45。Codabench 0.3766 **低于** Erlangshen 清洗基线 0.4320，**FAID 配置反而更差**。
-
 ### Round 2：调权重（lambda_mcl = 0.3, max_length = 512, alpha_knn = 0.7）
 **关键改动**：
 
-- `lambda_mcl: 1.0 → 0.3`（让分类头真正学）
+- `lambda_mcl: 1.0 → 0.3`
 
 - `lambda_aux_ce: 0.5 → 0.2`
 
-- `max_length: 256 → 512`（避免长文本截断）
+- `max_length: 256 → 512`
 
 - `alpha_knn: 0.5 → 0.7`，`knn_temperature: 0.7 → 0.5`
 | 指标 | Round 1 | Round 2 |
@@ -197,42 +161,19 @@ L_total = λ · L_SupCon + (1 − λ) · L_CE
 | **Codabench F1** | 0.3766 | **0.4139** |
 | 预测分布 (HWT/LGT/HLT) | 27/20/54 | 32/4/64 |
 
-> 内部 OOD 暴涨 0.62→0.95，**算法在"自己留的 OOD"上几乎完美**。Codabench 0.4139 只比基线 0.4320 低 0.018，仍**没有提升**。
+> 内部 OOD 暴涨 0.62→0.95，算法在"自己留的 OOD"上几乎完美。Codabench 0.4139。
 
-> **核心问题**：预测分布严重偏 HLT（64%），LGT 仅 4%——k-NN 把"中间/混合"特征都拉成 HLT。3 个 axis-isolated OOD 互相污染，**永远反映不了 testp1 的多轴叠加漂移**。
+> **核心问题**：预测分布严重偏 HLT（64%），LGT 仅 4%。k-NN 把"中间/混合"特征都拉成 HLT。
 
-### Round 3：换数据策略（v2 全量 + 富标签）
+### Round 3：换数据策略
 
-**核心动机**：Round 1/2 内部 OOD 0.94+ 但 Codabench 0.38–0.41，**说明在"自己留的 OOD"上调出来的指标，对真实 testp1 几乎没有预测力**。根因是 axis-isolated OOD 互相污染，永远反映不了 testp1 的多轴叠加漂移。所以本轮直接换数据策略：
+**核心动机**：Round 1/2 内部 OOD 0.94+ 但 Codabench 0.38–0.41，说明在"自己留的 OOD"上调出来的指标，对真实 testp1 几乎没有预测力。所以本轮换数据策略：
 
 - 6 维清洗保留
 - **不留任何 OOD**：4 家族（GPT4 / Qwen / ChatGLM / Baichuan）+ 2 域（News / Thesis）+ 2 变换（Rewrite / Polish）全部进 train
-- 80/20 随机分层（按 base ID 切，杜绝同一三元组泄露）
+- 8/2 随机分层
 - 类内 1:1:1 严格平衡
-- 输出**富标签格式** `{id, text, label, family, style_level, is_mixed}`，其中 `family` 注入到 5 项对比损失里的 `loss_set` / `loss_mixed_set`，让模型显式学"哪个 LLM 家族生成的"
-
-> **相对 Round 2 的关键变化**：训练样本 22,236 → **41,817**（×1.88），家族数 3 → 4，Thesis 覆盖 50% → 100%，Polish 覆盖 50% → 100%。
-
-#### 训练过程（10 epoch，~3.5h on 3090）
-
-| Epoch | in-dist val F1 | model_ood F1 | domain_ood F1 | transform_ood F1 | 4 集平均 | 用时 (s) |
-|-------|---------------|--------------|---------------|------------------|----------|---------|
-| 1     | 0.900         | 0.826        | 0.842         | 0.879            | 0.862    | 695 |
-| 2     | 0.904         | 0.846        | 0.873         | 0.890            | 0.878    | 699 |
-| 3     | 0.974         | 0.852        | 0.939         | 0.942            | 0.927    | 698 |
-| 4     | 0.974         | 0.864        | 0.944         | 0.946            | 0.932    | 698 |
-| 5     | 0.974         | 0.885        | 0.940         | 0.948            | 0.937    | 697 |
-| 6     | 0.977         | 0.874        | 0.949         | 0.951            | 0.938    | 696 |
-| 7     | **0.980**     | 0.851        | 0.949         | 0.948            | 0.932    | 697 |
-| 8     | 0.978         | 0.890        | 0.956         | 0.956            | 0.945    | 699 |
-| 9     | **0.980**     | 0.885        | 0.956         | 0.955            | 0.944    | 697 |
-| 10    | 0.979         | **0.890**    | 0.956         | **0.956**        | 0.945    | 700 |
-
-> **观察**：
-> - **epoch 2 → 3 出现一次明显跳变**（in-dist 0.904 → 0.974），意味着模型在 epoch 3 突然"开窍"，可能是辅助头与对比头终于和分类头对齐。
-> - epoch 5 之后 in-dist / domain_ood / transform_ood 都稳定在 0.95+；**model_ood 是唯一难以稳定的指标**（在 0.85–0.89 之间反复震荡），说明"未见过的 LLM 家族"仍然是最大短板。
-> - 选 **epoch 9** 作 best checkpoint（in-dist 0.980、4 集平均 0.944）。
-
+- 输出**富标签格式** `{id, text, label, family, style_level, is_mixed}`，其中 `family` 注入到 5 项对比损失里的 `loss_set` / `loss_mixed_set`，让模型显式学"哪个 LLM 家族生成的"。
 #### Codabench 官方评估
 
 | 指标 | 值 |
@@ -251,15 +192,6 @@ L_total = λ · L_SupCon + (1 − λ) · L_CE
 | **FAID Round 3** | **0.980** | **0.944** | **0.4004** |
 
 > 训练样本翻倍 + 4 家族全见 + 全域全覆盖，in-dist 进一步提升到 0.980，**但 Codabench 不升反降（0.4139 → 0.4004）**。
->
-> 一个值得注意的信号：**Round 3 的 in-dist 0.980 / 内部 4 集平均 0.944 / Codabench 0.4004 是 3 个差距最大的一组**——in-dist 和内部 OOD 几乎完美，但真实 OOD 暴跌 0.55，再次印证：
->
-> 1. axis-isolated OOD（哪怕是"全家族可见"）**不能作为 testp1 难度的代理**；
-> 2. **增加训练数据 / 增强模型容量不能突破"单轴分离的 OOD"与"多轴叠加的真实 OOD"之间的本质差距**；
-> 3. FAID 论文给出的"作者风格对比 + 多任务辅助"在原作者设定的 in-domain 设置里 work，**但 task-specific 的 OOD 漂移要靠 task-specific 的解法**。
-
-
-**所有 FAID 变体都低于或接近基线 0.4320**。该方案带来的所有复杂度（5 项对比损失、3 个辅助头、Fuzzy k-NN、序数回归）都没能转化为 OOD 泛化的提升——核心瓶颈在 testp1 的分布漂移本身，不在算法。
 ---
 
 ## Binoculars Cascade（Stage 1 零样本 + Stage 2 二分类）
