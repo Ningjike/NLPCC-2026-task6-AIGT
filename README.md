@@ -149,6 +149,7 @@ L_total = λ · L_SupCon + (1 − λ) · L_CE
 - `max_length: 256 → 512`
 
 - `alpha_knn: 0.5 → 0.7`，`knn_temperature: 0.7 → 0.5`
+  
 | 指标 | Round 1 | Round 2 |
 |------|---------|---------|
 | 训练 L_main（终） | 0.50 | 0.50 |
