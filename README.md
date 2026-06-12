@@ -173,8 +173,8 @@ L_total = λ · L_SupCon + (1 − λ) · L_CE
 - 6 维清洗保留
 - **不留任何 OOD**：4 家族（GPT4 / Qwen / ChatGLM / Baichuan）+ 2 域（News / Thesis）+ 2 变换（Rewrite / Polish）全部进 train
 - 8/2 随机分层
-- 类内 1:1:1 严格平衡
-- 输出**富标签格式** `{id, text, label, family, style_level, is_mixed}`，其中 `family` 注入到 5 项对比损失里的 `loss_set` / `loss_mixed_set`，让模型显式学"哪个 LLM 家族生成的"。
+- 类内 1:1:1
+- 标签格式 {id, text, label, family, style_level, is_mixed}`，其中 `family` 注入到 5 项对比损失里的 `loss_set` / `loss_mixed_set`，让模型显式学"哪个 LLM 家族生成的"。
 #### Codabench 官方评估
 
 | 指标 | 值 |
@@ -182,17 +182,15 @@ L_total = λ · L_SupCon + (1 − λ) · L_CE
 | in-dist val F1（epoch 9） | 0.980 |
 | 内部 4 集平均 F1 | 0.944 |
 | **Codabench F1（testp1）** | **0.4004** |
-
+> 训练样本翻倍 + 4 家族全见 + 全域全覆盖，in-dist 进一步提升到 0.980，**但 Codabench 不升反降（0.4139 → 0.4004）**。
 #### 结论
 
 | | in-dist F1 | 内部 4 集平均 | **Codabench F1** |
 |------|-----------|---------------|------------------|
-| Erlangshen 清洗基线 | 0.9709 | — | **0.4320**（基线）|
+| Erlangshen 基线 | 0.9709 | — | **0.4320**|
 | FAID Round 1 | 0.674 | 0.623 | 0.3766 |
 | FAID Round 2 | 0.978 | 0.945 | 0.4139 |
-| **FAID Round 3** | **0.980** | **0.944** | **0.4004** |
-
-> 训练样本翻倍 + 4 家族全见 + 全域全覆盖，in-dist 进一步提升到 0.980，**但 Codabench 不升反降（0.4139 → 0.4004）**。
+| **FAID Round 3** | **0.980** | **0.944** | 0.4004 |
 ---
 
 ## Binoculars Cascade（Stage 1 零样本 + Stage 2 二分类）
